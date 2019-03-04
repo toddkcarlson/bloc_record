@@ -36,10 +36,28 @@
      self.class.update(self.id, updates)
    end
 
+   def destroy
+     self.class.destroy(self.id)
+   end
+
    module ClassMethods
      def update_all(updates)
        update(nil, updates)
-     end    
+     end
+
+     def destroy(*id)
+       if id.length > 1
+         where_clause = "WHERE id IN (#{id.join(",")});"
+       else
+         where_clause = "WHERE id = #{id.first};"
+       end
+       connection.execute <<-SQL       
+         DELETE FROM #{table} #{where_clause} 
+       SQL
+ 
+       true
+     end
+
      def create(attrs)
        attrs = BlocRecord::Utility.convert_keys(attrs)
        attrs.delete "id"
@@ -77,6 +95,36 @@
        SQL
 
        true
-     end     
+     end
+
+     def destroy_all(*args)
+       case args && !args.empty?
+       when Hash
+         conditions_hash = BlocRecord::Utility.convert_keys(args)
+         conditions = conditions_hash.map {|key, value| "#{key}=#{BlocRecord::Utility.sql_strings(value)}"}.join(" and ")
+         connection.execute <<-SQL
+           DELETE FROM #{table}
+           WHERE #{conditions};
+         SQL
+
+       when Array
+         conditions = "WHERE arg IN (#{arg.join(",")});"
+         connection.execute <<-SQL
+           DELETE FROM #{table}
+           WHERE #{conditions};
+         SQL
+
+       when String
+         rows = connection.execute <<-SQL
+           DELETE FROM #{table} #{BlocRecord::Utility.sql_strings(args.first)};
+         SQL
+
+       when Symbol
+         rows = connection.execute <<-SQL
+           DELETE FROM #{table}
+           #{args.first} ON #{args.first}.#{table}_id = #{table}.id
+         SQL
+       end
+     end      
    end
  end
