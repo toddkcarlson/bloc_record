@@ -74,13 +74,10 @@
      end
 
      def update(ids, updates)
-       # #1
        updates = BlocRecord::Utility.convert_keys(updates)
        updates.delete "id"
-       # #2
        updates_array = updates.map { |key, value| "#{key}=#{BlocRecord::Utility.sql_strings(value)}" }
        where_clause = id.nil? ? ";" : "WHERE id = #{id};"
-       # #3
        if ids.class == Fixnum
          where_clause = "WHERE id = #{ids};"
        elsif ids.class == Array
@@ -88,7 +85,7 @@
        else
          where_clause = ";"
        end
-       
+
        connection.execute <<-SQL
          UPDATE #{table}
          SET #{updates_array * ","} #{where_clause}
@@ -96,6 +93,33 @@
 
        true
      end
+
+   def method_missing(name, *args, &block)
+     if name.start_with? "update_" and args.length == 1
+       attr = name[7..-1]
+       self.update_attribute(attr.to_sym, args[0])
+     else
+       super
+     end
+   end 
+
+   def take
+     row = connection.get_first_row <<-SQL
+       SELECT #{columns.join ","} FROM #{table}
+     SQL
+
+     init_object_from_row(row)
+   end
+
+   def where(updates)
+     ids = self.map(&:id)
+     self.any? ? self.first.class.update(ids, updates) : false
+   end
+
+   def not(updates)
+     ids = self.map(&:id)
+     self.any? ? false : self.first.class.update(ids, updates)
+   end
 
      def destroy_all(*args)
        case args && !args.empty?
